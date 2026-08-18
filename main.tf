@@ -67,12 +67,6 @@ resource "aws_cloudwatch_log_group" "flow_log" {
 # ============================================
 # IAM Role for Flow Logs
 # ============================================
-# tfsec:ignore:aws-iam-no-policy-wildcards
-# NOTE: The trailing ":*" is required by AWS to scope this policy to log
-# streams within this specific log group (arn:...:log-group:name:*).
-# This is not a true wildcard — it's the documented AWS pattern for
-# CloudWatch Logs least-privilege scoping. See AWS docs Example 3:
-# https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/permissions-reference-cwl.html
 resource "aws_iam_role" "flow_log_role" {
   name = "capstone-flow-log-role"
 
@@ -96,6 +90,12 @@ resource "aws_iam_role" "flow_log_role" {
 }
 
 # IAM Policy - 限制资源范围
+# NOTE: The trailing ":*" is required by AWS to scope this policy to log
+# streams within this specific log group (arn:...:log-group:name:*).
+# This is not a true wildcard — it's the documented AWS pattern for
+# CloudWatch Logs least-privilege scoping. See AWS docs Example 3:
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/permissions-reference-cwl.html
+#tfsec:ignore:aws-iam-no-policy-wildcards
 resource "aws_iam_role_policy" "flow_log_policy" {
   name = "capstone-flow-log-policy"
   role = aws_iam_role.flow_log_role.id
