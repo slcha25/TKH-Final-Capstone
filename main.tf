@@ -1,5 +1,5 @@
 # ============================================
-# VPC 配置
+# VPC
 # ============================================
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -14,25 +14,31 @@ resource "aws_vpc" "main" {
 }
 
 # ============================================
-# VPC Flow Logs - 修复 AVD-AWS-0178 (MEDIUM)
+# KMS Key for CloudWatch Encryption
 # ============================================
-resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.flow_log_role.arn
-  log_destination = aws_cloudwatch_log_group.flow_log.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+resource "aws_kms_key" "cloudwatch" {
+  description             = "KMS key for CloudWatch Log Group encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = {
-    Name        = "capstone-flow-logs"
     Environment = "production"
     Project     = "capstone"
   }
 }
 
-# CloudWatch Log Group for Flow Logs
+resource "aws_kms_alias" "cloudwatch" {
+  name          = "alias/capstone-cloudwatch"
+  target_key_id = aws_kms_key.cloudwatch.key_id
+}
+
+# ============================================
+# CloudWatch Log Group (加密)
+# ============================================
 resource "aws_cloudwatch_log_group" "flow_log" {
-  name = "capstone-vpc-flow-logs"
+  name              = "capstone-vpc-flow-logs"
   retention_in_days = 30
+  kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = {
     Environment = "production"
@@ -40,7 +46,9 @@ resource "aws_cloudwatch_log_group" "flow_log" {
   }
 }
 
+# ============================================
 # IAM Role for Flow Logs
+# ============================================
 resource "aws_iam_role" "flow_log_role" {
   name = "capstone-flow-log-role"
 
@@ -63,6 +71,7 @@ resource "aws_iam_role" "flow_log_role" {
   }
 }
 
+# IAM Policy - 限制资源范围
 resource "aws_iam_role_policy" "flow_log_policy" {
   name = "capstone-flow-log-policy"
   role = aws_iam_role.flow_log_role.id
@@ -78,20 +87,20 @@ resource "aws_iam_role_policy" "flow_log_policy" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect = "Allow"
-        Resource = "*"
+        Effect   = "Allow"
+        Resource = "${aws_cloudwatch_log_group.flow_log.arn}:*"
       }
     ]
   })
 }
 
 # ============================================
-# 子网配置
+# Subnet (不自动分配公网IP)
 # ============================================
 resource "aws_subnet" "main" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name        = "capstone-subnet"
@@ -101,7 +110,7 @@ resource "aws_subnet" "main" {
 }
 
 # ============================================
-# 互联网网关
+# Internet Gateway
 # ============================================
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
@@ -114,7 +123,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 # ============================================
-# 路由表
+# Route Table
 # ============================================
 resource "aws_route_table" "main" {
   vpc_id = aws_vpc.main.id
@@ -132,7 +141,7 @@ resource "aws_route_table" "main" {
 }
 
 # ============================================
-# 路由表关联
+# Route Table Association
 # ============================================
 resource "aws_route_table_association" "main" {
   subnet_id      = aws_subnet.main.id
@@ -140,42 +149,28 @@ resource "aws_route_table_association" "main" {
 }
 
 # ============================================
-# 安全组 - 修复所有安全组相关问题
+# VPC Flow Logs
+# ============================================
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.flow_log_role.arn
+  log_destination = aws_cloudwatch_log_group.flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = {
+    Name        = "capstone-flow-logs"
+    Environment = "production"
+    Project     = "capstone"
+  }
+}
+
+# ============================================
+# Security Group
 # ============================================
 resource "aws_security_group" "web" {
   name_prefix = "web-sg"
   vpc_id      = aws_vpc.main.id
-
-  description = "Security group for web server - allows HTTP and restricted SSH access"
-
-  # HTTP 入站规则 - 修复 AVD-AWS-0107 (CRITICAL)
-  # 注意：Web服务器必须允许 HTTP 从任何地方访问
-  ingress {
-    description = "Allow HTTP from anywhere for public web access"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # SSH 入站规则 - 严格限制 IP
-  ingress {
-    description = "Allow SSH from authorized IP only"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["74.64.35.195/32"]  # 替换为你的实际IP
-  }
-
-  # 出站规则 - 修复 AVD-AWS-0104 (CRITICAL)
-  # 允许必要的出站流量（访问互联网更新软件）
-  egress {
-    description = "Allow all outbound traffic for system updates and internet access"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  description = "Security group for web server"
 
   tags = {
     Name        = "web-sg"
@@ -184,31 +179,61 @@ resource "aws_security_group" "web" {
   }
 }
 
+# Security Group Rules
+resource "aws_security_group_rule" "http_inbound" {
+  type              = "ingress"
+  description       = "Allow HTTP from anywhere for public web access"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.web.id
+}
+
+resource "aws_security_group_rule" "ssh_inbound" {
+  type              = "ingress"
+  description       = "Allow SSH from authorized IP only"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = ["你的IP地址/32"]
+  security_group_id = aws_security_group.web.id
+}
+
+resource "aws_security_group_rule" "all_outbound" {
+  type              = "egress"
+  description       = "Allow all outbound traffic for system updates"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.web.id
+}
+
 # ============================================
-# EC2 实例 - 修复 AVD-AWS-0028 (HIGH)
+# EC2 Instance
 # ============================================
 resource "aws_instance" "web" {
-  ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2023
+  ami           = "ami-0c02fb55956c7d316"
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.web.id]
+  
+  associate_public_ip_address = true
 
-  # 加密根卷
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
     volume_size = 8
   }
 
-  # 强制使用 IMDSv2 - 修复 AVD-AWS-0028
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # 强制使用 token
+    http_tokens                 = "required"
     http_put_response_hop_limit = 1
     instance_metadata_tags      = "disabled"
   }
 
-  # 用户数据
   user_data = <<-EOF
     #!/bin/bash
     yum update -y
@@ -226,7 +251,7 @@ resource "aws_instance" "web" {
 }
 
 # ============================================
-# 输出
+# Outputs
 # ============================================
 output "public_ip" {
   value       = aws_instance.web.public_ip
