@@ -1,0 +1,18 @@
+name: DevSecOps Quality Gate
+on:
+  push:
+    branches:
+      - main
+jobs:
+  tfsec_scan:
+    name: Terraform SAST Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-pr-commenter-action@v1.2.0
+        with:
+          tfsec_args: --soft-fail=false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
