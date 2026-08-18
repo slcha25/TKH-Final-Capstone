@@ -9,10 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # 更新到v4
         
       - name: Run tfsec
-        uses: aquasecurity/tfsec-pr-commenter-action@v1.2.0
+        uses: aquasecurity/tfsec-pr-commenter-action@v1.3.1  # 更新版本
         with:
           tfsec_args: --soft-fail=false
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # 添加调试步骤 - 查看详细的扫描结果
+      - name: Upload tfsec results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfsec-results
+          path: results.json

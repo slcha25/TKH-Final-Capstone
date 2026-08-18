@@ -2,7 +2,9 @@
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name = "capstone-vpc"
+    Name        = "capstone-vpc"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
 
@@ -11,7 +13,9 @@ resource "aws_subnet" "main" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.1.0/24"
   tags = {
-    Name = "capstone-subnet"
+    Name        = "capstone-subnet"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
 
@@ -19,9 +23,12 @@ resource "aws_subnet" "main" {
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags = {
-    Name = "capstone-igw"
+    Name        = "capstone-igw"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
+
 
 # Create Route Table
 resource "aws_route_table" "main" {
@@ -33,7 +40,9 @@ resource "aws_route_table" "main" {
   }
 
   tags = {
-    Name = "capstone-route-table"
+    Name        = "capstone-route-table"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
 
@@ -54,7 +63,7 @@ resource "aws_security_group" "web" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow HTTP from anywhere"
+    description = "Allow HTTP web traffic - public web server access"
   }
 
    # SSH access (restricted) (port 22) - only allow personal IP
@@ -75,7 +84,9 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "web-sg"
+    Name        = "web-sg"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
 
@@ -83,9 +94,16 @@ resource "aws_security_group" "web" {
 
 resource "aws_instance" "web" {
   ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2023
-  instance_type = "t2.micro"               
+  instance_type = "t2.micro"
   subnet_id     = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.web.id]
+
+  # 加密根卷
+  root_block_device {
+    encrypted   = true
+    volume_type = "gp3"
+    volume_size = 8
+  }
 
   # User Data Script - it run automatically when the Server run
   user_data = <<-EOF
@@ -98,15 +116,18 @@ resource "aws_instance" "web" {
   EOF
 
   tags = {
-    Name = "capstone-web-server"
+    Name        = "capstone-web-server"
+    Environment = "production"
+    Project     = "capstone"
   }
 }
 
-# Server IP address output
 output "public_ip" {
-  value = aws_instance.web.public_ip
+  value       = aws_instance.web.public_ip
+  description = "Public IP address of the web server"
 }
 
 output "public_dns" {
-  value = aws_instance.web.public_dns
+  value       = aws_instance.web.public_dns
+  description = "Public DNS of the web server"
 }
