@@ -34,20 +34,49 @@ resource "aws_vpc" "main" {
 # ============================================
 # KMS Key for CloudWatch Encryption
 # ============================================
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 resource "aws_kms_key" "cloudwatch" {
   description             = "KMS key for CloudWatch Log Group encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableRootPermissions"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudWatchLogsToUseKey"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${data.aws_region.current.name}.amazonaws.com" }
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:Describe*"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = {
     Environment = "production"
     Project     = "capstone"
   }
-}
-
-resource "aws_kms_alias" "cloudwatch" {
-  name          = "alias/capstone-cloudwatch"
-  target_key_id = aws_kms_key.cloudwatch.key_id
 }
 
 # ============================================
@@ -221,7 +250,7 @@ resource "aws_security_group_rule" "ssh_inbound" {
   from_port         = 22
   to_port           = 22
   protocol          = "tcp"
-  cidr_blocks       = ["74.64.35.195/32"]
+  cidr_blocks       = ["74.64.35.195/32"]  # <--your Home IP
   security_group_id = aws_security_group.web.id
 }
 
@@ -250,7 +279,7 @@ resource "aws_instance" "web" {
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
-    volume_size = 8
+    volume_size = 30
   }
 
   metadata_options {
