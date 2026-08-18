@@ -1,4 +1,22 @@
 # ============================================
+# use a data source to dynamically look up the latest Amazon Linux 2023 AMI instead of hardcoding it.
+# ============================================
+
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+# ============================================
 # VPC
 # ============================================
 resource "aws_vpc" "main" {
@@ -180,6 +198,7 @@ resource "aws_security_group" "web" {
 }
 
 # Security Group Rules
+# tfsec:ignore:aws-ec2-no-public-ingress-sgr
 resource "aws_security_group_rule" "http_inbound" {
   type              = "ingress"
   description       = "Allow HTTP from anywhere for public web access"
@@ -196,10 +215,11 @@ resource "aws_security_group_rule" "ssh_inbound" {
   from_port         = 22
   to_port           = 22
   protocol          = "tcp"
-  cidr_blocks       = ["你的IP地址/32"]
+  cidr_blocks       = ["74.64.35.195/32"]
   security_group_id = aws_security_group.web.id
 }
 
+#tfsec:ignore:aws-ec2-no-public-egress-sgr
 resource "aws_security_group_rule" "all_outbound" {
   type              = "egress"
   description       = "Allow all outbound traffic for system updates"
@@ -214,7 +234,7 @@ resource "aws_security_group_rule" "all_outbound" {
 # EC2 Instance
 # ============================================
 resource "aws_instance" "web" {
-  ami           = "ami-0c02fb55956c7d316"
+  ami           = data.aws_ami.amazon_linux_2023.id
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.web.id]
