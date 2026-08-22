@@ -71,7 +71,25 @@ VPC Flow Logs ──► CloudWatch Log Group ──► encrypted with a customer
 │   └── security-scan.yml            # tfsec CI pipeline
 └── README.md
 ```
+## 🎥 Video Demos
 
+### Secure Automated Web Architecture explanation
+
+This video explains all pipeline from scratch to deploy
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=4dnu3NGmRkw">
+    <img
+      src="https://img.youtube.com/vi/4dnu3NGmRkw/maxresdefault.jpg"
+      alt="Secure Automated Web Architecture"
+      width="85%"
+    >
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=4dnu3NGmRkw">
+     
 ## Prerequisites
 
 - An AWS account with programmatic (CLI) access configured
